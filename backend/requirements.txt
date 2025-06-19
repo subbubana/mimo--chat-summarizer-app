@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+firebase-admin
+google-cloud-firestore
+SQLAlchemy
+psycopg2-binary # Example for PostgreSQL
+langchain
+langchain-community
+langchain-google-genai
+langgraph
+python-dotenv
+reportlab # For PDF generation

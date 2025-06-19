@@ -1,0 +1,1 @@
+# Common constants shared between backend and potentially frontend (if using Transpiler)

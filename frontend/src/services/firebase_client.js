@@ -1,0 +1,1 @@
+// Frontend Firebase SDK setup

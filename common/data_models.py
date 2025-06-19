@@ -1,0 +1,1 @@
+# Common data models (e.g., Message structure if shared)
