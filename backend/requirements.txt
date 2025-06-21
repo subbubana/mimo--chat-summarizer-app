@@ -11,3 +11,7 @@ langchain-google-genai
 langgraph
 python-dotenv
 reportlab # For PDF generation
+langchain>=0.2.0 # Ensure LangChain core dependencies are met
+langchain-core>=0.2.0
+langchain-google-genai>=0.0.1
+langgraph>=0.0.60
