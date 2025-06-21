@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Firebase ID Token</title>
+    <script type="module">
+        // Your Firebase config from the prompt
+        const firebaseConfig = {
+            apiKey: "AIzaSyDOiaO2gZ42QdbmROUJ80Yvp8ZqhHaH8A8",
+            authDomain: "subbus-messenger.firebaseapp.com",
+            projectId: "subbus-messenger",
+            storageBucket: "subbus-messenger.firebasestorage.app",
+            messagingSenderId: "511919968088",
+            appId: "1:511919968088:web:ca14ccec7f7e2db9d59f2d",
+            measurementId: "G-LP8V2G2M97"
+        };
+
+        // Firebase App (the core Firebase SDK) is always required and must be listed first
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        // Add the Firebase products that you want to use
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const loginBtn = document.getElementById('loginBtn');
+            const tokenDisplay = document.getElementById('tokenDisplay');
+            const statusMessage = document.getElementById('statusMessage');
+
+            loginBtn.addEventListener('click', async () => {
+                const email = emailInput.value;
+                const password = passwordInput.value;
+                statusMessage.textContent = 'Attempting login...';
+                tokenDisplay.textContent = '';
+
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    const user = userCredential.user;
+                    const idToken = await user.getIdToken();
+                    tokenDisplay.textContent = `ID Token: ${idToken}`;
+                    statusMessage.textContent = 'Login successful! Copy the ID Token above.';
+                    console.log('ID Token:', idToken);
+                } catch (error) {
+                    console.error("Login Error:", error);
+                    statusMessage.textContent = `Login failed: ${error.message}`;
+                    tokenDisplay.textContent = '';
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Get Firebase ID Token for Testing</h1>
+    <p>Use an email and password of a user you previously signed up via the backend `/auth/signup` endpoint.</p>
+    <div>
+        <label for="email">Email:</label>
+        <input type="email" id="email" value="testuser@example.com"><br><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" value="password123"><br><br>
+        <button id="loginBtn">Login & Get ID Token</button>
+    </div>
+    <p id="statusMessage" style="color: red;"></p>
+    <textarea id="tokenDisplay" rows="5" cols="80" readonly style="margin-top: 20px;"></textarea>
+</body>
+</html>
