@@ -20,7 +20,7 @@ router = APIRouter(
 
 class ChatCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    
+    description: Optional[str] = None
     # Optional start time (if not provided, defaults to creation time)
     start_time: Optional[datetime] = None 
     # Mandatory end time
@@ -33,6 +33,8 @@ class ChatResponse(BaseModel):
     id: str
     name: str
     creator_id: str
+    creator_username: str
+    description: Optional[str] = None
     created_at: str
     status: str             # UPDATED: Explicitly include status
     start_time: Optional[str]
@@ -166,16 +168,22 @@ async def create_chat(
     db.commit()
     db.refresh(new_chat)
 
+    creator_user = db.query(DBUser).filter(DBUser.id == new_chat.creator_id).first()
+    creator_username = creator_user.username if creator_user else "undefined"
+
     return ChatResponse(
         id=new_chat.id,
         name=new_chat.name,
         creator_id=new_chat.creator_id,
+        creator_username=creator_username,
+        description=new_chat.description if hasattr(new_chat, 'description') else None,
         created_at=new_chat.created_at.isoformat(),
         status=new_chat.status, # NEW: Include actual status
         start_time=new_chat.start_time.isoformat() if new_chat.start_time else None,
         end_time=new_chat.end_time.isoformat(),
         participants_count=len(all_participants_uids)
     )
+
 # NEW: Endpoint to add a participant to a chat
 @router.post("/{chat_id}/participants", status_code=status.HTTP_200_OK)
 async def add_participant(
@@ -273,18 +281,99 @@ async def get_my_chats(
     user_memberships = db.query(ChatParticipant).filter(ChatParticipant.user_id == current_user_uid).all()
     
     chats = []
+    now = datetime.now(timezone.utc)
     for membership in user_memberships:
         chat = db.query(Chat).filter(Chat.id == membership.chat_id).first()
         if chat:
+            creator_user = db.query(DBUser).filter(DBUser.id == chat.creator_id).first()
+            creator_username = creator_user.username if creator_user else "undefined"
+            # --- Ensure status is up-to-date ---
+            if chat.end_time <= now:
+                status = "completed"
+            elif chat.start_time and chat.start_time > now:
+                status = "scheduled"
+            else:
+                status = "active"
             participants_count = db.query(ChatParticipant).filter(ChatParticipant.chat_id == chat.id).count()
             chats.append(ChatResponse(
                 id=chat.id,
                 name=chat.name,
                 creator_id=chat.creator_id,
+                creator_username=creator_username,
+                description=chat.description if hasattr(chat, 'description') else None,
                 created_at=chat.created_at.isoformat(),
-                status=chat.status, # NEW: Include actual status
+                status=status, # Use computed status
                 start_time=chat.start_time.isoformat() if chat.start_time else None,
                 end_time=chat.end_time.isoformat(),
                 participants_count=participants_count
             ))
     return chats
+
+@router.get("/{chat_id}", response_model=ChatResponse)
+async def get_chat(
+    chat_id: str = Path(...),
+    current_user_uid: str = Depends(get_current_user_uid),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details for a single chat by ID (only if user is a participant).
+    """
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+    # Check if user is a participant
+    is_participant = db.query(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id,
+        ChatParticipant.user_id == current_user_uid
+    ).first()
+    if not is_participant:
+        raise HTTPException(status_code=403, detail="You are not a participant of this chat.")
+    participants_count = db.query(ChatParticipant).filter(ChatParticipant.chat_id == chat.id).count()
+    creator_user = db.query(DBUser).filter(DBUser.id == chat.creator_id).first()
+    creator_username = creator_user.username if creator_user else "undefined"
+    now = datetime.now(timezone.utc)
+    if chat.end_time <= now:
+        status = "completed"
+    elif chat.start_time and chat.start_time > now:
+        status = "scheduled"
+    else:
+        status = "active"
+    return ChatResponse(
+        id=chat.id,
+        name=chat.name,
+        creator_id=chat.creator_id,
+        creator_username=creator_username,
+        description=chat.description if hasattr(chat, 'description') else None,
+        created_at=chat.created_at.isoformat(),
+        status=status,
+        start_time=chat.start_time.isoformat() if chat.start_time else None,
+        end_time=chat.end_time.isoformat(),
+        participants_count=participants_count
+    )
+
+@router.get("/{chat_id}/participants", response_model=List[str])
+async def get_chat_participants(
+    chat_id: str = Path(...),
+    current_user_uid: str = Depends(get_current_user_uid),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the list of participant usernames for a chat.
+    """
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+    # Only allow participants to view the list
+    is_participant = db.query(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id,
+        ChatParticipant.user_id == current_user_uid
+    ).first()
+    if not is_participant:
+        raise HTTPException(status_code=403, detail="You are not a participant of this chat.")
+    participant_links = db.query(ChatParticipant).filter(ChatParticipant.chat_id == chat_id).all()
+    usernames = []
+    for link in participant_links:
+        user = db.query(DBUser).filter(DBUser.id == link.user_id).first()
+        if user:
+            usernames.append(user.username)
+    return usernames

@@ -16,6 +16,7 @@ from backend.src.app.auth.auth_routes import router as auth_router # Import our 
 from backend.src.app.chats.chat_routes import router as chat_router # New: Import chat router
 from backend.src.app.messages.message_routes import router as message_router # New: Import message router
 from backend.src.app.summary_routes import router as summary_router # New: Import summary router
+from backend.src.app.user_routes import router as user_router
 
 app = FastAPI(
     title="Chat Summarizer Backend",
@@ -27,7 +28,8 @@ app = FastAPI(
 # IMPORTANT: Adjust origins in production
 origins = [
     "http://localhost",
-    "http://localhost:3000", # Default React dev server port
+    "http://localhost:3000",
+     "http://localhost:5173" # Default React dev server port
     # Add your frontend production URL here
 ]
 
@@ -44,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(message_router)
 app.include_router(summary_router)
+app.include_router(user_router)
 
 @app.get("/")
 async def read_root():
