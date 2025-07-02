@@ -46,7 +46,7 @@ class ChatResponse(BaseModel):
 
 # NEW: Pydantic model for adding a participant
 class AddParticipantRequest(BaseModel):
-    user_uid: str = Field(..., description="Firebase UID of the user to add.")
+    username: str = Field(..., description="Username of the user to add.")
 
 # NEW: Pydantic model for removing a participant (can use path param too, but for consistency)
 class RemoveParticipantRequest(BaseModel):
@@ -203,15 +203,15 @@ async def add_participant(
     if chat.creator_id != current_user_uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the chat creator can add participants.")
 
-    # 2. Verify the user to be added actually exists in our DB
-    user_to_add = db.query(DBUser).filter(DBUser.id == request_data.user_uid).first()
+    # 2. Find the user by username
+    user_to_add = db.query(DBUser).filter(DBUser.username == request_data.username).first()
     if not user_to_add:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to add not found in our system.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with username '{request_data.username}' not found.")
 
     # 3. Check if user is already a participant
     existing_participant = db.query(ChatParticipant).filter(
         ChatParticipant.chat_id == chat_id,
-        ChatParticipant.user_id == request_data.user_uid
+        ChatParticipant.user_id == user_to_add.id
     ).first()
     if existing_participant:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a participant of this chat.")
@@ -220,13 +220,13 @@ async def add_participant(
     new_participant = ChatParticipant(
         id=str(uuid.uuid4()), # Generate a unique ID for the participant entry
         chat_id=chat_id,
-        user_id=request_data.user_uid
+        user_id=user_to_add.id
     )
     db.add(new_participant)
     db.commit()
     db.refresh(new_participant)
 
-    print(f"DEBUG_CHAT_MANAGEMENT: User {request_data.user_uid} added to chat {chat_id} by creator {current_user_uid}.")
+    print(f"DEBUG_CHAT_MANAGEMENT: User {user_to_add.username} (UID: {user_to_add.id}) added to chat {chat_id} by creator {current_user_uid}.")
     return {"message": f"User {user_to_add.username} added to chat successfully."}
 
 
