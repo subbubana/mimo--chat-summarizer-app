@@ -1,5 +1,5 @@
 # backend/src/app/auth/auth_routes.py
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session # For database session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Import specific SQLAlchemy errors
@@ -115,13 +115,13 @@ async def login(user_data: UserLogin):
     )
 
 # Dependency to get current authenticated user's Firebase UID
-async def get_current_user_uid(id_token: str = Depends(lambda token: token)):
+async def get_current_user_uid(token: str = Query(..., alias="token")):
     """
     Verifies the Firebase ID token and returns the user's UID.
     Includes a DEVELOPMENT-ONLY workaround for persistent clock skew.
     """
     print(f"DEBUG_BACKEND_AUTH: get_current_user_uid called.")
-    print(f"DEBUG_BACKEND_AUTH: Received ID Token (first 30 chars): {id_token[:30]}...")
+    print(f"DEBUG_BACKEND_AUTH: Received ID Token (first 30 chars): {token[:30]}...")
 
     # --- DEVELOPMENT-ONLY WORKAROUND FOR PERSISTENT CLOCK SKEW ---
     # Purpose: To unblock development by allowing a small time leeway and bypassing
@@ -136,8 +136,8 @@ async def get_current_user_uid(id_token: str = Depends(lambda token: token)):
     try:
         # 1. Manually decode the header and payload to get iat/exp and uid
         # This doesn't verify signature yet, just parses the JWT structure.
-        decoded_header = jwt.get_unverified_header(id_token)
-        decoded_payload = jwt.decode(id_token, options={"verify_signature": False}) 
+        decoded_header = jwt.get_unverified_header(token)
+        decoded_payload = jwt.decode(token, options={"verify_signature": False}) 
 
         token_iat = decoded_payload.get('iat')
         token_exp = decoded_payload.get('exp')
@@ -167,7 +167,7 @@ async def get_current_user_uid(id_token: str = Depends(lambda token: token)):
         # This part will still fail if the internal time check is triggered,
         # but we will bypass if our manual check passed and error is time-related.
         try:
-            full_decoded_token = auth.verify_id_token(id_token)
+            full_decoded_token = auth.verify_id_token(token)
             uid = full_decoded_token['uid']
             print(f"DEBUG_BACKEND_AUTH: Token verified successfully by Firebase Admin SDK for UID: {uid}")
             return uid

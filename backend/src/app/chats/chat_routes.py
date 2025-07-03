@@ -377,3 +377,73 @@ async def get_chat_participants(
         if user:
             usernames.append(user.username)
     return usernames
+
+# NEW: Endpoint for a user to exit a chat (remove themselves as participant)
+@router.delete("/{chat_id}/exit", status_code=status.HTTP_200_OK)
+async def exit_chat(
+    chat_id: str = Path(...),
+    current_user_uid: str = Depends(get_current_user_uid),
+    db: Session = Depends(get_db)
+):
+    """
+    Allows a user to exit a chat by removing themselves as a participant.
+    If the creator exits, the chat is marked as completed.
+    """
+    # 1. Verify chat exists
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found.")
+
+    # 2. Check if user is a participant
+    participant = db.query(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id,
+        ChatParticipant.user_id == current_user_uid
+    ).first()
+    if not participant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not a participant of this chat.")
+
+    # 3. Remove the participant
+    db.delete(participant)
+
+    # 4. If the creator is exiting, mark the chat as completed
+    if chat.creator_id == current_user_uid:
+        chat.status = "completed"
+        print(f"DEBUG_CHAT_MANAGEMENT: Creator {current_user_uid} exited chat {chat_id}, marking as completed.")
+
+    db.commit()
+
+    print(f"DEBUG_CHAT_MANAGEMENT: User {current_user_uid} exited chat {chat_id}.")
+    return {"message": "Successfully exited chat."}
+
+# NEW: Endpoint for a user to delete a chat (only creator can do this)
+@router.delete("/{chat_id}/delete", status_code=status.HTTP_200_OK)
+async def delete_chat(
+    chat_id: str = Path(...),
+    current_user_uid: str = Depends(get_current_user_uid),
+    db: Session = Depends(get_db)
+):
+    """
+    Allows the chat creator to delete a chat entirely.
+    This removes all participants and marks the chat as completed.
+    """
+    # 1. Verify chat exists
+    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found.")
+
+    # 2. Check if current user is the creator
+    if chat.creator_id != current_user_uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the chat creator can delete the chat.")
+
+    # 3. Remove all participants
+    participants = db.query(ChatParticipant).filter(ChatParticipant.chat_id == chat_id).all()
+    for participant in participants:
+        db.delete(participant)
+
+    # 4. Mark chat as completed
+    chat.status = "completed"
+
+    db.commit()
+
+    print(f"DEBUG_CHAT_MANAGEMENT: Chat {chat_id} deleted by creator {current_user_uid}.")
+    return {"message": "Chat deleted successfully."}
