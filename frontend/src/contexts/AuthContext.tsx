@@ -32,9 +32,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setLoading(false);
-      if (!user) {
-        navigate('/login');
-      }
+      // Remove automatic redirect to login - let individual pages handle authentication
     });
     return unsubscribe;
   }, [navigate]);

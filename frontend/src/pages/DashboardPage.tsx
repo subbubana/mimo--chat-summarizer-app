@@ -1,7 +1,7 @@
 // frontend/src/pages/DashboardPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 
 // MUI Imports
 import Box from '@mui/material/Box';
@@ -50,10 +50,10 @@ interface ChatListDisplayProps {
 // ChatListDisplay Component (moved here from previous inline definition)
 const ChatListDisplay: React.FC<ChatListDisplayProps> = ({ chats, categoryTitle, onChatClick }) => {
   return (
-    <Box sx={{ width: '100%', pt: 2, pb: 2 }}>
-      <Typography variant="h5" sx={{ mb: 2, color: '#3f51b5' }}>{categoryTitle}</Typography>
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
+      <Typography variant="h5" sx={{ mb: 2, color: '#3f51b5', flexShrink: 0 }}>{categoryTitle}</Typography>
       {chats.length > 0 ? (
-        <List sx={{ width: '100%' }}>
+        <List sx={{ width: '100%', flexGrow: 1, overflowY: 'auto' }}>
           {chats.map(chat => (
             <ListItemButton 
               key={chat.id} 
@@ -84,7 +84,9 @@ const ChatListDisplay: React.FC<ChatListDisplayProps> = ({ chats, categoryTitle,
           ))}
         </List>
       ) : (
-        <Typography variant="body2" color="text.secondary">No {categoryTitle.toLowerCase()} to display.</Typography>
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography variant="body2" color="text.secondary">No {categoryTitle.toLowerCase()} to display.</Typography>
+        </Box>
       )}
     </Box>
   );
@@ -94,6 +96,8 @@ const ChatListDisplay: React.FC<ChatListDisplayProps> = ({ chats, categoryTitle,
 function DashboardPage() {
   const { currentUser, logout, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = useSearchParams();
 
   const [allChats, setAllChats] = useState<ChatResponse[]>([]);
   const [activeChats, setActiveChats] = useState<ChatResponse[]>([]);
@@ -152,6 +156,14 @@ function DashboardPage() {
 
     } catch (err: any) {
       console.error("Failed to fetch chats:", err);
+      console.error("Fetch chats error details:", {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        message: err.message
+      });
+      
+      // Don't automatically redirect to login - let the user see the error
       setChatsError(err.response?.data?.detail || "Could not load chats.");
     } finally {
       setFetchingChats(false); 
@@ -164,6 +176,44 @@ function DashboardPage() {
     }
   }, [currentUser]); 
 
+  // Add effect to refresh chats when component comes into focus
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Dashboard focus event triggered, currentUser:', currentUser ? currentUser.uid : 'null');
+      if (currentUser) {
+        console.log('Fetching chats on focus...');
+        fetchChats();
+      }
+    };
+
+    // Refresh chats when window gains focus (user returns from chat room)
+    window.addEventListener('focus', handleFocus);
+    
+    // Also refresh when component mounts (in case user navigated back)
+    console.log('Dashboard mounted, calling handleFocus...');
+    handleFocus();
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [currentUser]);
+
+  // Refresh chats when user navigates back to dashboard
+  useEffect(() => {
+    console.log('Location changed to:', location.pathname, 'currentUser:', currentUser ? currentUser.uid : 'null');
+    if (currentUser && location.pathname === '/chats') {
+      console.log('Fetching chats on location change...');
+      fetchChats();
+    }
+  }, [location.pathname, currentUser]);
+
+  // Handle section parameter from URL
+  useEffect(() => {
+    const section = searchParams[0].get('section');
+    if (section && ['active', 'scheduled', 'previous', 'home'].includes(section)) {
+      setSelectedCategory(section as 'home' | 'active' | 'scheduled' | 'previous');
+    }
+  }, [searchParams]);
 
   const handleOpenCreateChat = () => {
     setOpenCreateChatDialog(true);
@@ -196,7 +246,8 @@ function DashboardPage() {
     );
   }
 
-  if (!currentUser) {
+  // Only redirect to login if we're not loading and definitely don't have a user
+  if (!loading && !currentUser) {
     navigate('/login');
     return null;
   }
@@ -249,18 +300,20 @@ function DashboardPage() {
           return null;
       }
       return (
-        <ChatListDisplay
-          chats={chatsToDisplay}
-          categoryTitle={categoryTitle}
-          onChatClick={handleChatClick}
-        />
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <ChatListDisplay
+            chats={chatsToDisplay}
+            categoryTitle={categoryTitle}
+            onChatClick={handleChatClick}
+          />
+        </Box>
       );
     }
   };
 
 
   const handleChatClick = (chatId: string) => {
-    navigate(`/chat/${chatId}`); 
+    navigate(`/chat/${chatId}?from=${selectedCategory}`); 
   };
 
 
@@ -407,6 +460,7 @@ function DashboardPage() {
           flexDirection: 'column',
           p: 0,
           m: 0,
+          overflowY: 'auto', // Make the content area scrollable
         }}
       >
         {renderRightContent()}
